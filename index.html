@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Schaltterme zu größeren Schaltnetzen</title>
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --bg:#f3f6f4; --card:#ffffff; --ink:#1b2a27; --muted:#5b6b67; --line:#c9d6d1;
+  --accent:#0f6b5c; --accent-ink:#ffffff; --sel:#dff0ea;
+  --ok:#1d7a3a; --ok-bg:#dcf2e1; --bad:#b3261e; --bad-bg:#fbe2df;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#121a18; --card:#1b2624; --ink:#e6efec; --muted:#9bb0aa; --line:#33443f;
+    --accent:#4fc3a8; --accent-ink:#0b1513; --sel:#244039;
+    --ok:#7fd99a; --ok-bg:#1d3a27; --bad:#ff9d94; --bad-bg:#432220;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121a18; --card:#1b2624; --ink:#e6efec; --muted:#9bb0aa; --line:#33443f;
+  --accent:#4fc3a8; --accent-ink:#0b1513; --sel:#244039;
+  --ok:#7fd99a; --ok-bg:#1d3a27; --bad:#ff9d94; --bad-bg:#432220;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;line-height:1.5}
+main{max-width:860px;margin:0 auto;padding:24px 16px 40px}
+h1{font-size:1.6rem;margin:0 0 6px}
+.lead{color:var(--muted);margin:0 0 22px}
+.list{display:grid;gap:14px}
+.card{background:var(--card);border:2px solid var(--line);border-radius:10px;padding:14px}
+.card.ok{background:var(--ok-bg);border-color:var(--ok)}
+.card.bad{background:var(--bad-bg);border-color:var(--bad)}
+.card h2{font-size:1rem;margin:0 0 6px;color:var(--muted);font-weight:600}
+svg{display:block;width:100%;max-width:420px;height:auto;margin:0 auto 10px}
+svg polyline{fill:none;stroke:var(--ink);stroke-width:2}
+svg .box{fill:var(--card);stroke:var(--ink);stroke-width:2}
+svg circle{fill:var(--card);stroke:var(--ink);stroke-width:2}
+svg text{fill:var(--ink);font-family:Consolas,"Courier New",monospace;font-weight:600}
+.answer{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.eq{font-family:Consolas,"Courier New",monospace;font-weight:700;font-size:1.2rem}
+.slot{
+  flex:1;min-height:52px;display:flex;flex-wrap:wrap;align-items:center;gap:6px;
+  border:2px dashed var(--line);border-radius:10px;padding:6px;
+}
+.slot .hint{color:var(--muted);font-size:.85rem;padding:0 4px}
+.pool{display:flex;flex-wrap:wrap;gap:6px}
+button.tile{
+  font-family:Consolas,"Courier New",monospace;font-size:1.25rem;font-weight:700;
+  min-width:2.4em;height:2.4em;border-radius:10px;cursor:pointer;padding:0 8px;
+  border:2px solid var(--line);background:var(--card);color:var(--accent);
+}
+button.tile:hover:not(:disabled){border-color:var(--accent)}
+button.tile:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+button.tile:disabled{opacity:.3;cursor:default;border-style:dashed}
+button.tile.placed{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.note{margin:8px 0 0;font-weight:600;font-size:.9rem;min-height:1.3em}
+.card.ok .note{color:var(--ok)} .card.bad .note{color:var(--bad)}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:24px;align-items:center}
+.btn{font:inherit;font-weight:600;border-radius:10px;padding:11px 20px;cursor:pointer;border:2px solid var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+#msg{margin-top:18px;font-weight:600;min-height:1.5em}
+#msg.ok{color:var(--ok)} #msg.bad{color:var(--bad)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Schaltterme zu größeren Schaltnetzen</h1>
+  <p class="lead">Stelle zu jedem Schaltnetz den passenden Schaltterm auf. Tippe dazu die Bausteine in der richtigen Reihenfolge an. Nicht jeder Baustein wird gebraucht. Ein Baustein im Term lässt sich durch Antippen wieder entfernen.</p>
+
+  <div class="list" id="list"></div>
+
+  <div class="actions">
+    <button class="btn primary" id="check" disabled>Prüfen</button>
+    <button class="btn ghost" id="reset">Zurücksetzen</button>
+  </div>
+  <div id="msg" role="status" aria-live="polite"></div>
+</main>
+
+<script>
+/* ===== Einstellung für die Lehrkraft =====
+   Variablennamen hier ändern, z. B. ["x","y","z"].
+   Alternativ per Link: …?vars=x,y,z */
+let VARS = ["a","b","c"];
+try{
+  const q = new URLSearchParams(location.search).get("vars");
+  if(q){ const v = q.split(",").map(s=>s.trim()).filter(Boolean); if(v.length===3) VARS = v; }
+}catch(e){}
+
+const AND="∧", OR="∨", NOT="¬";
+const V=i=>["V",VARS[i]], N=x=>["N",x], A=(x,y)=>["A",x,y], O=(x,y)=>["O",x,y];
+
+// Schaltnetze als Baum und Bausteine je Aufgabe
+const tasks = [
+  { tree: A(N(V(0)),V(1)),            gates:2, pool:[VARS[0],VARS[1],NOT,AND,OR,"(",")","1"] },
+  { tree: A(O(V(0),V(1)),N(V(2))),    gates:3, pool:[VARS[0],VARS[1],VARS[2],NOT,AND,OR,"(",")","0"] },
+  { tree: A(N(O(V(0),V(1))),N(V(2))), gates:4, pool:[VARS[0],VARS[1],VARS[2],NOT,NOT,AND,OR,OR,"(",")"] }
+];
+
+/* ---------- Schaltnetz zeichnen ---------- */
+function drawNet(root){
+  let leaf = 0;
+  (function walk(n){
+    if(n[0]==="V"){ n.d=0; n.y=30+50*(leaf++); return; }
+    const kids = n.slice(1); kids.forEach(walk);
+    n.d = 1+Math.max(...kids.map(k=>k.d));
+    n.y = kids.reduce((s,k)=>s+k.y,0)/kids.length;
+  })(root);
+  const H = 30+50*(leaf-1)+30;
+  let out = "";
+  function draw(n){
+    if(n[0]==="V"){
+      out += `<text x="28" y="${n.y+5}" font-size="17" text-anchor="end">${n[1]}</text>`;
+      return {x:36,y:n.y};
+    }
+    const kids = n.slice(1).map(k=>({k, o:draw(k)})).sort((p,q)=>p.o.y-q.o.y);
+    const xl = 70+(n.d-1)*110, cy = n.y, isNot = n[0]==="N";
+    const h = isNot ? 30 : 46;
+    const ins = isNot ? [cy] : [cy-13, cy+13];
+    kids.forEach((c,i)=>{
+      const xm = xl-14;
+      out += `<polyline points="${c.o.x},${c.o.y} ${xm},${c.o.y} ${xm},${ins[i]} ${xl},${ins[i]}"/>`;
+    });
+    out += `<rect class="box" x="${xl}" y="${cy-h/2}" width="56" height="${h}" rx="2"/>`;
+    const sym = n[0]==="A" ? "&amp;" : n[0]==="O" ? "≥1" : "1";
+    out += `<text x="${xl+28}" y="${cy+6}" font-size="17" text-anchor="middle">${sym}</text>`;
+    let ox = xl+56;
+    if(isNot){ out += `<circle cx="${ox+5}" cy="${cy}" r="5"/>`; ox += 10; }
+    return {x:ox,y:cy};
+  }
+  const end = draw(root);
+  out += `<polyline points="${end.x},${end.y} ${end.x+40},${end.y}"/>`;
+  out += `<text x="${end.x+50}" y="${end.y+6}" font-size="17">Q</text>`;
+  return `<svg viewBox="0 0 ${end.x+75} ${H}" role="img" aria-label="Schaltnetz">${out}</svg>`;
+}
+
+/* ---------- Term lesen und vergleichen ---------- */
+function parse(tokens){
+  let p = 0;
+  const fail = ()=>{ throw new Error("syntax"); };
+  function expr(){ let n = term(); while(tokens[p]===OR){ p++; n = O(n,term()); } return n; }
+  function term(){ let n = factor(); while(tokens[p]===AND){ p++; n = A(n,factor()); } return n; }
+  function factor(){
+    const t = tokens[p];
+    if(t===NOT){ p++; return N(factor()); }
+    if(t==="("){ p++; const n = expr(); if(tokens[p]!==")") fail(); p++; return n; }
+    if(t===undefined || t===")" || t===AND || t===OR) fail();
+    p++; return ["V",t];
+  }
+  const n = expr(); if(p!==tokens.length) fail(); return n;
+}
+function canon(n){
+  if(n[0]==="V") return n[1];
+  if(n[0]==="N") return "N("+canon(n[1])+")";
+  const flat = (x)=> x[0]===n[0] ? flat(x[1]).concat(flat(x[2])) : [canon(x)];
+  return n[0]+"["+flat(n[1]).concat(flat(n[2])).sort().join(",")+"]";
+}
+function evaluate(i){
+  const toks = ans[i].map(k=>tasks[i].pool[k]);
+  let tree;
+  try{ tree = parse(toks); }
+  catch(e){ return {ok:false, note:"Der Term ist unvollständig oder die Klammern passen nicht."}; }
+  return canon(tree)===canon(tasks[i].tree)
+    ? {ok:true, note:"Richtig."}
+    : {ok:false, note:"Noch nicht richtig. Du kannst den Term ändern."};
+}
+
+/* ---------- Oberfläche ---------- */
+let ans = tasks.map(()=>[]);
+let checked = false;
+const list = document.getElementById("list");
+const msg = document.getElementById("msg");
+const checkBtn = document.getElementById("check");
+
+function render(){
+  list.innerHTML = "";
+  tasks.forEach((t,i)=>{
+    const card = document.createElement("div");
+    card.className = "card";
+    let res = null;
+    if(checked){ res = evaluate(i); card.classList.add(res.ok?"ok":"bad"); }
+    card.innerHTML = `<h2>Schaltnetz ${i+1} (${t.gates} Gatter)</h2>${drawNet(t.tree)}
+      <div class="answer"><span class="eq">Q =</span><div class="slot" aria-label="Dein Schaltterm"></div></div>
+      <div class="pool"></div>
+      <p class="note">${res?res.note:""}</p>`;
+    const slot = card.querySelector(".slot");
+    if(!ans[i].length) slot.innerHTML = `<span class="hint">Bausteine antippen</span>`;
+    ans[i].forEach(k=>{
+      const b = document.createElement("button");
+      b.type="button"; b.className="tile placed"; b.textContent = t.pool[k];
+      b.title = "Entfernen"; b.setAttribute("aria-label", `${t.pool[k]} entfernen`);
+      b.onclick = ()=>{ ans[i] = ans[i].filter(x=>x!==k); change(); };
+      slot.append(b);
+    });
+    const pool = card.querySelector(".pool");
+    t.pool.forEach((p,k)=>{
+      const b = document.createElement("button");
+      b.type="button"; b.className="tile"; b.textContent=p;
+      b.disabled = ans[i].includes(k);
+      b.setAttribute("aria-label", `Baustein ${p}`);
+      b.onclick = ()=>{ ans[i].push(k); change(); };
+      pool.append(b);
+    });
+    list.append(card);
+  });
+  checkBtn.disabled = ans.some(a=>a.length===0);
+}
+
+function change(){ checked=false; msg.className=""; msg.textContent=""; render(); }
+
+checkBtn.onclick = ()=>{
+  checked = true;
+  const n = tasks.filter((_,i)=>evaluate(i).ok).length;
+  if(n===tasks.length){ msg.className="ok"; msg.textContent="Alles richtig. Sehr gut!"; }
+  else{ msg.className="bad"; msg.textContent = `${n} von ${tasks.length} richtig. Die rot markierten Schaltterme kannst du ändern.`; }
+  render();
+};
+
+document.getElementById("reset").onclick = ()=>{ ans = tasks.map(()=>[]); change(); };
+
+render();
+</script>
+</body>
+</html>
